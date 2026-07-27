@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lab Tracker">
+<meta name="theme-color" content="#1c1917">
+<title>Lab Tracker</title>
+
+<!-- PWA manifest is generated at runtime from a blob (data: URL manifests trigger syntax errors in newer browsers) -->
+<script>
+  (function(){
+    var manifest = {
+      name: "Lab Tracker",
+      short_name: "Labs",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#fafaf9",
+      theme_color: "#1c1917",
+      orientation: "portrait",
+      icons: [{
+        src: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="40" fill="#1c1917"/><path d="M40 96 L70 96 L80 70 L100 130 L115 90 L130 105 L152 105" stroke="#10b981" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'),
+        sizes: "192x192",
+        type: "image/svg+xml"
+      }, {
+        src: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="106" fill="#1c1917"/><path d="M106 256 L186 256 L213 186 L266 346 L306 240 L340 280 L406 280" stroke="#10b981" stroke-width="21" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'),
+        sizes: "512x512",
+        type: "image/svg+xml"
+      }]
+    };
+    var blob = new Blob([JSON.stringify(manifest)], {type: "application/json"});
+    var link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = URL.createObjectURL(blob);
+    document.head.appendChild(link);
+  })();
+</script>
+
+<!-- Apple touch icon -->
+<link rel="apple-touch-icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="40" fill="%231c1917"/><path d="M40 96 L70 96 L80 70 L100 130 L115 90 L130 105 L152 105" stroke="%2310b981" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="40" fill="%231c1917"/><path d="M40 96 L70 96 L80 70 L100 130 L115 90 L130 105 L152 105" stroke="%2310b981" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'>
+
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/react-is@18.3.1/umd/react-is.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+  html, body { margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #fafaf9; padding-bottom: env(safe-area-inset-bottom); }
+  input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="number"] { -moz-appearance: textfield; }
+  .font-serif-display { font-family: 'Fraunces', Georgia, serif; }
+  .font-mono-tag { font-family: 'JetBrains Mono', monospace; }
+  /* iOS safe area for fixed header */
+  header { padding-top: env(safe-area-inset-top); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, ReferenceLine } = Recharts;
+
+// Tiny lucide icon helper
+const Icon = ({ name, className = "w-4 h-4", strokeWidth = 2 }) => {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = '';
+      const el = document.createElement('i');
+      el.setAttribute('data-lucide', name);
+      el.className = className;
+      ref.current.appendChild(el);
+      if (window.lucide) window.lucide.createIcons({ attrs: { 'stroke-width': strokeWidth } });
+    }
+  }, [name, className, strokeWidth]);
+  return <span ref={ref} className="inline-flex" />;
+};
+
+// =====================================================================
+// REFERENCE RANGES — Australian adult typical values
+// =====================================================================
+const PANELS = {
+  FBC: {
+    label: 'Full Blood Count',
+    tests: [
+      { key: 'hb', name: 'Haemoglobin', unit: 'g/L', low: 135, high: 180 },
+      { key: 'wcc', name: 'White Cell Count', unit: '×10⁹/L', low: 4.0, high: 11.0 },
+      { key: 'plt', name: 'Platelets', unit: '×10⁹/L', low: 150, high: 400 },
+      { key: 'hct', name: 'Haematocrit', unit: 'L/L', low: 0.40, high: 0.53 },
+      { key: 'mcv', name: 'MCV', unit: 'fL', low: 80, high: 96 },
+      { key: 'mch', name: 'MCH', unit: 'pg', low: 27.0, high: 33.0 },
+      { key: 'mchc', name: 'MCHC', unit: 'g/L', low: 320, high: 360 },
+      { key: 'rcc', name: 'Red Cell Count', unit: '×10¹²/L', low: 4.30, high: 6.50 },
+      { key: 'rdw', name: 'RDW', unit: '%', low: 11.0, high: 14.5 },
+      { key: 'mpv', name: 'MPV', unit: 'fL', low: 7.4, high: 10.4 },
+      { key: 'neut', name: 'Neutrophils', unit: '×10⁹/L', low: 1.80, high: 7.50 },
+      { key: 'lymph', name: 'Lymphocytes', unit: '×10⁹/L', low: 1.20, high: 4.00 },
+      { key: 'mono', name: 'Monocytes', unit: '×10⁹/L', low: 0.10, high: 1.00 },
+      { key: 'eos', name: 'Eosinophils', unit: '×10⁹/L', low: 0.00, high: 0.70 },
+      { key: 'baso', name: 'Basophils', unit: '×10⁹/L', low: 0.00, high: 0.20 },
+      { key: 'nrbc', name: 'nRBC Auto', unit: '/100 WBCs', low: null, high: 1.0 },
+    ],
+  },
+  UEC: {
+    label: 'Urea, Electrolytes & Creatinine',
+    tests: [
+      { key: 'na', name: 'Sodium', unit: 'mmol/L', low: 135, high: 145 },
+      { key: 'k', name: 'Potassium', unit: 'mmol/L', low: 3.5, high: 5.2 },
+      { key: 'cl', name: 'Chloride', unit: 'mmol/L', low: 95, high: 110 },
+      { key: 'hco3', name: 'Bicarbonate', unit: 'mmol/L', low: 22, high: 32 },
+      { key: 'urea', name: 'Urea', unit: 'mmol/L', low: 3.4, high: 9.0 },
+      { key: 'creat', name: 'Creatinine', unit: 'µmol/L', low: 60, high: 110 },
+      { key: 'egfr', name: 'eGFR', unit: 'mL/min/1.73m²', low: 90, high: null },
+      { key: 'glucose', name: 'Glucose', unit: 'mmol/L', low: 3.0, high: 7.7 },
+      { key: 'glucose_fasting', name: 'Glucose (fasting)', unit: 'mmol/L', low: 3.5, high: 5.5 },
+      { key: 'anion_gap', name: 'Anion Gap', unit: 'mmol/L', low: 8, high: 16 },
+      { key: 'osmolality', name: 'Osmolality (calc)', unit: 'mosm/kg', low: 280, high: 300 },
+    ],
+  },
+  LFT: {
+    label: 'Liver Function Tests',
+    tests: [
+      { key: 'tprot', name: 'Total Protein', unit: 'g/L', low: 60, high: 80 },
+      { key: 'alb', name: 'Albumin', unit: 'g/L', low: 33, high: 50 },
+      { key: 'glob', name: 'Globulin', unit: 'g/L', low: 20, high: 40 },
+      { key: 'tbili', name: 'Total Bilirubin', unit: 'µmol/L', low: 2, high: 20 },
+      { key: 'alp', name: 'ALP', unit: 'U/L', low: 30, high: 110 },
+      { key: 'ggt', name: 'GGT', unit: 'U/L', low: null, high: 71 },
+      { key: 'alt', name: 'ALT', unit: 'U/L', low: null, high: 40 },
+      { key: 'ast', name: 'AST', unit: 'U/L', low: null, high: 40 },
+      { key: 'ldh', name: 'LDH', unit: 'U/L', low: 120, high: 250 },
+      { key: 'cpk', name: 'Creatine Kinase (CPK)', unit: 'U/L', low: null, high: 294 },
+      { key: 'lipase', name: 'Lipase', unit: 'U/L', low: null, high: 55 },
+      { key: 'amylase', name: 'Amylase', unit: 'U/L', low: null, high: 100 },
+    ],
+  },
+  LIPIDS: {
+    label: 'Lipid Studies',
+    tests: [
+      { key: 'tchol', name: 'Total Cholesterol', unit: 'mmol/L', low: null, high: 5.5 },
+      { key: 'ldl', name: 'LDL Cholesterol', unit: 'mmol/L', low: null, high: 3.5 },
+      { key: 'hdl', name: 'HDL Cholesterol', unit: 'mmol/L', low: 1.0, high: null },
+      { key: 'nonhdl', name: 'Non-HDL Cholesterol', unit: 'mmol/L', low: null, high: 3.4 },
+      { key: 'trig', name: 'Triglycerides', unit: 'mmol/L', low: null, high: 2.0 },
+      { key: 'cholhdl', name: 'Chol/HDL Ratio', unit: '', low: null, high: 4.5 },
+    ],
+  },
+  TFT: {
+    label: 'Thyroid Function',
+    tests: [
+      { key: 'tsh', name: 'TSH', unit: 'mIU/L', low: 0.4, high: 4.0 },
+      { key: 'ft4', name: 'Free T4', unit: 'pmol/L', low: 10, high: 20 },
+      { key: 'ft3', name: 'Free T3', unit: 'pmol/L', low: 3.5, high: 6.5 },
+    ],
+  },
+  IRON: {
+    label: 'Iron Studies',
+    tests: [
+      { key: 'iron', name: 'Iron', unit: 'µmol/L', low: 12, high: 31 },
+      { key: 'transferrin', name: 'Transferrin', unit: 'g/L', low: 1.7, high: 3.4 },
+      { key: 'tsat', name: 'Transferrin Saturation', unit: '%', low: 18, high: 46 },
+      { key: 'ferritin', name: 'Ferritin', unit: 'µg/L', low: 30, high: 620 },
+    ],
+  },
+  CMP: {
+    label: 'Calcium, Magnesium, Phosphate',
+    tests: [
+      { key: 'ca_total', name: 'Calcium (total)', unit: 'mmol/L', low: 2.10, high: 2.60 },
+      { key: 'ca', name: 'Calcium (corrected)', unit: 'mmol/L', low: 2.10, high: 2.60 },
+      { key: 'mg', name: 'Magnesium', unit: 'mmol/L', low: 0.70, high: 1.10 },
+      { key: 'phos', name: 'Phosphate', unit: 'mmol/L', low: 0.75, high: 1.50 },
+      { key: 'urate', name: 'Urate', unit: 'mmol/L', low: 0.20, high: 0.42 },
+    ],
+  },
+  COAG: {
+    label: 'Coagulation',
+    tests: [
+      { key: 'inr', name: 'INR', unit: '', low: 0.9, high: 1.2 },
+      { key: 'pt', name: 'PT', unit: 's', low: 11, high: 15 },
+      { key: 'aptt', name: 'APTT', unit: 's', low: 25, high: 38 },
+      { key: 'fib', name: 'Fibrinogen', unit: 'g/L', low: 2.0, high: 4.0 },
+      { key: 'ddim', name: 'D-Dimer', unit: 'mg/L FEU', low: null, high: 0.5 },
+    ],
+  },
+  HBA1C: {
+    label: 'HbA1c & Diabetes',
+    tests: [
+      { key: 'hba1c_pct', name: 'HbA1c', unit: '%', low: null, high: 6.0 },
+      { key: 'hba1c_mmol', name: 'HbA1c', unit: 'mmol/mol', low: null, high: 42 },
+    ],
+  },
+  VITD: {
+    label: 'Vitamins & B12',
+    tests: [
+      { key: 'vitd', name: 'Vitamin D (25-OH)', unit: 'nmol/L', low: 60, high: 250 },
+      { key: 'b12', name: 'Vitamin B12', unit: 'pmol/L', low: 138, high: 652 },
+      { key: 'active_b12', name: 'Active B12 (Holotranscobalamin)', unit: 'pmol/L', low: 25, high: 165 },
+      { key: 'folate', name: 'Folate', unit: 'nmol/L', low: 7, high: null },
+    ],
+  },
+  CRP: {
+    label: 'Inflammatory Markers',
+    tests: [
+      { key: 'crp', name: 'CRP', unit: 'mg/L', low: null, high: 6.0 },
+      { key: 'esr', name: 'ESR', unit: 'mm/hr', low: null, high: 20 },
+    ],
+  },
+  STOOL: {
+    label: 'Stool / GI',
+    tests: [
+      { key: 'fcal', name: 'Faecal Calprotectin', unit: 'µg/g', low: null, high: 50 },
+    ],
+  },
+  ALLERGY: {
+    label: 'Allergy / IgE',
+    tests: [
+      { key: 'ige_total', name: 'Total IgE', unit: 'kU/L', low: null, high: 100 },
+      { key: 'ige_dustmite', name: 'House Dust & Mite Mix (hx2)', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_grass', name: 'Grass Pollen Mix (gx1)', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_tree', name: 'Tree Pollen Mix (tx1)', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_weed', name: 'Weed Pollen Mix (wx1)', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_aspergillus', name: 'Aspergillus fumigatus IgE', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_cat', name: 'Cat Dander IgE', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_dog', name: 'Dog Dander IgE', unit: 'kU/L', low: null, high: 0.35 },
+      { key: 'ige_peanut', name: 'Peanut IgE', unit: 'kU/L', low: null, high: 0.35 },
+    ],
+  },
+  SEROLOGY: {
+    label: 'Serology / Immunity (numeric)',
+    tests: [
+      { key: 'hbsab', name: 'Hepatitis B surface Ab (HBsAb)', unit: 'mIU/mL', low: 10, high: null },
+      { key: 'rubella_igg', name: 'Rubella IgG level', unit: 'IU/mL', low: 10, high: null },
+      { key: 'qft_tb1', name: 'Quantiferon TB1 - Nil', unit: 'IU/mL', low: null, high: 0.35 },
+      { key: 'qft_tb2', name: 'Quantiferon TB2 - Nil', unit: 'IU/mL', low: null, high: 0.35 },
+      { key: 'qft_nil', name: 'Quantiferon Nil (negative ctrl)', unit: 'IU/mL', low: null, high: 8.0 },
+      { key: 'qft_mit', name: 'Quantiferon Mit-Nil (positive ctrl)', unit: 'IU/mL', low: 0.50, high: null },
+    ],
+  },
+  URINE: {
+    label: 'Urine',
+    tests: [
+      { key: 'urine_wcc', name: 'Urine Leucocytes', unit: '×10⁶/L', low: null, high: 10 },
+      { key: 'urine_rbc', name: 'Urine Erythrocytes', unit: '×10⁶/L', low: null, high: 10 },
+      { key: 'urine_squam', name: 'Urine Squamous Epithelial Cells', unit: '×10⁶/L', low: null, high: 10 },
+      // Encoded categorical results: 0=normal/not seen, 1=present/abnormal
+      { key: 'urine_culture_pos', name: 'Urine Culture Positive (1=Yes)', unit: '', low: null, high: 0.5 },
+      { key: 'urine_nitrites', name: 'Urine Nitrites (1=Positive)', unit: '', low: null, high: 0.5 },
+      { key: 'urine_protein', name: 'Urine Protein (1=Positive)', unit: '', low: null, high: 0.5 },
+      { key: 'urine_glucose', name: 'Urine Glucose (1=Positive)', unit: '', low: null, high: 0.5 },
+      { key: 'urine_blood', name: 'Urine Blood (1=Positive)', unit: '', low: null, high: 0.5 },
+    ],
+  },
+  MICRO: {
+    label: 'Microbiology / Cultures',
+    tests: [
+      // 0 = no growth/negative, 1 = growth/positive
+      { key: 'bc_aerobic', name: 'Blood Culture Aerobic (1=Growth)', unit: '', low: null, high: 0.5 },
+      { key: 'bc_anaerobic', name: 'Blood Culture Anaerobic (1=Growth)', unit: '', low: null, high: 0.5 },
+      { key: 'bc_set', name: 'Blood Culture Set Positive (1=Growth)', unit: '', low: null, high: 0.5 },
+      { key: 'sputum_culture_pos', name: 'Sputum Culture Positive (1=Growth)', unit: '', low: null, high: 0.5 },
+      { key: 'wound_culture_pos', name: 'Wound Culture Positive (1=Growth)', unit: '', low: null, high: 0.5 },
+      { key: 'stool_culture_pos', name: 'Stool Culture Positive (1=Growth)', unit: '', low: null, high: 0.5 },
+    ],
+  },
+  RESP_VIRAL: {
+    label: 'Respiratory Virus PCR',
+    tests: [
+      { key: 'sars_cov2', name: 'SARS-CoV-2 RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'flu_a', name: 'Influenza A RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'flu_b', name: 'Influenza B RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'rsv', name: 'RSV RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'rhinovirus', name: 'Rhinovirus RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'parainfluenza', name: 'Parainfluenza RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'adenovirus', name: 'Adenovirus DNA (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'hmpv', name: 'Human Metapneumovirus RNA (1=Detected)', unit: '', low: null, high: 0.5 },
+    ],
+  },
+  SEROLOGY_QUAL: {
+    label: 'Serology — Qualitative',
+    tests: [
+      // 1 = Detected/Positive, 0 = Not Detected/Negative
+      // Using high: 0.5 means 1 flags as "high" (out of normal screening expectation if pathological)
+      // For immunity markers, we want DETECTED = good, so leaving null
+      { key: 'hiv_agab', name: 'HIV-1/2 Ag/Ab (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'hbsag', name: 'Hepatitis B surface Ag (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'hbcab', name: 'Hepatitis B core Ab (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'hcv_ab', name: 'Hepatitis C Ab (1=Detected)', unit: '', low: null, high: 0.5 },
+      { key: 'measles_igg', name: 'Measles IgG (1=Detected/immune)', unit: '', low: null, high: null },
+      { key: 'mumps_igg', name: 'Mumps IgG (1=Detected/immune)', unit: '', low: null, high: null },
+      { key: 'rubella_igg_qual', name: 'Rubella IgG (1=Detected/immune)', unit: '', low: null, high: null },
+      { key: 'vzv_igg', name: 'Varicella zoster IgG (1=Detected/immune)', unit: '', low: null, high: null },
+      { key: 'ebv_vca_igg', name: 'EBV VCA IgG (1=Detected)', unit: '', low: null, high: null },
+      { key: 'ebv_vca_igm', name: 'EBV VCA IgM (1=Detected/acute)', unit: '', low: null, high: 0.5 },
+      { key: 'ebv_ebna_igg', name: 'EBV EBNA IgG (1=Detected)', unit: '', low: null, high: null },
+      { key: 'cmv_igg', name: 'CMV IgG (1=Detected)', unit: '', low: null, high: null },
+      { key: 'cmv_igm', name: 'CMV IgM (1=Detected/acute)', unit: '', low: null, high: 0.5 },
+      { key: 'qft_interp', name: 'Quantiferon TB Interpretation (1=Positive)', unit: '', low: null, high: 0.5 },
+    ],
+  },
+};
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+const STORAGE_KEY = 'labs:v1';
+const CUSTOM_GROUPS_KEY = 'labs:customGroups:v1';
+
+const flagStatus = (value, low, high) => {
+  if (value === null || value === undefined || value === '') return 'normal';
+  const v = parseFloat(value);
+  if (isNaN(v)) return 'normal';
+  if (low !== null && low !== undefined && v < low) return 'low';
+  if (high !== null && high !== undefined && v > high) return 'high';
+  return 'normal';
+};
+
+const fmtDate = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const fmtDateShort = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
+};
+
+const ALL_TESTS = Object.entries(PANELS).flatMap(([panelKey, panel]) =>
+  panel.tests.map(t => ({ ...t, panelKey, panelLabel: panel.label }))
+);
+
+const findTest = (key) => ALL_TESTS.find(t => t.key === key);
+
+// LocalStorage helpers
+const loadEntries = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+};
+const saveEntries = (entries) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch {}
+};
+
+// =====================================================================
+// MAIN APP
+// =====================================================================
+function LabTracker() {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('dashboard');
+  const [selectedTest, setSelectedTest] = useState(null);
+
+  useEffect(() => {
+    setEntries(loadEntries());
+    setLoading(false);
+  }, []);
+
+  const persist = (next) => { setEntries(next); saveEntries(next); };
+
+  const addEntry = (entry) => {
+    const next = [...entries, { ...entry, id: Date.now() + Math.random() }];
+    next.sort((a, b) => new Date(a.date) - new Date(b.date));
+    persist(next);
+  };
+  const deleteEntry = (id) => persist(entries.filter(e => e.id !== id));
+
+  const allResults = useMemo(() => {
+    const arr = [];
+    entries.forEach(entry => {
+      Object.entries(entry.results || {}).forEach(([testKey, value]) => {
+        if (value === '' || value === null || value === undefined) return;
+        const test = findTest(testKey);
+        if (!test) return;
+        arr.push({
+          entryId: entry.id, date: entry.date, lab: entry.lab, notes: entry.notes,
+          testKey, test, value: parseFloat(value),
+          status: flagStatus(value, test.low, test.high),
+        });
+      });
+    });
+    return arr.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [entries]);
+
+  const activeTests = useMemo(() => {
+    const map = new Map();
+    allResults.forEach(r => {
+      const existing = map.get(r.testKey);
+      if (!existing || new Date(r.date) > new Date(existing.date)) map.set(r.testKey, r);
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.test.panelLabel.localeCompare(b.test.panelLabel) || a.test.name.localeCompare(b.test.name)
+    );
+  }, [allResults]);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center text-stone-400 font-mono-tag text-sm">loading…</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-50 text-stone-900">
+      <header className="border-b border-stone-200 bg-white sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-stone-900 flex items-center justify-center">
+              <Icon name="activity" className="w-5 h-5 text-emerald-400" strokeWidth={2.5} />
+            </div>
+            <div>
+              <div className="font-bold text-base tracking-tight font-serif-display">Pathology Tracker</div>
+              <div className="text-[10px] uppercase tracking-widest text-stone-400 font-mono-tag">
+                {entries.length} {entries.length === 1 ? 'collection' : 'collections'} · {activeTests.length} tests
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setView('entry')} className="bg-stone-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-stone-800 transition flex items-center gap-2">
+            <Icon name="plus" className="w-4 h-4" /> New
+          </button>
+        </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-1 -mb-px overflow-x-auto">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: 'activity' },
+            { id: 'trends', label: 'Trends', icon: 'trending-up' },
+            { id: 'history', label: 'History', icon: 'calendar' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setView(tab.id)}
+              className={`px-4 py-2.5 text-xs uppercase tracking-wider font-mono-tag border-b-2 transition flex items-center gap-2 whitespace-nowrap ${
+                view === tab.id ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-700'
+              }`}>
+              <Icon name={tab.icon} className="w-3.5 h-3.5" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        {view === 'dashboard' && (
+          <Dashboard activeTests={activeTests} allResults={allResults} entries={entries}
+            onSelectTest={(key) => { setSelectedTest(key); setView('trends'); }}
+            onNewEntry={() => setView('entry')}
+            onExport={() => exportData(entries)}
+            onImport={persist} />
+        )}
+        {view === 'entry' && (
+          <EntryForm onSave={(entry) => { addEntry(entry); setView('dashboard'); }} onCancel={() => setView('dashboard')} />
+        )}
+        {view === 'trends' && (
+          <Trends allResults={allResults} activeTests={activeTests} selectedTest={selectedTest} onSelectTest={setSelectedTest} />
+        )}
+        {view === 'history' && <History entries={entries} onDelete={deleteEntry} />}
+      </main>
+    </div>
+  );
+}
+
+// =====================================================================
+// DASHBOARD
+// =====================================================================
+function Dashboard({ activeTests, allResults, entries, onSelectTest, onNewEntry, onExport, onImport }) {
+  const abnormalCount = activeTests.filter(t => t.status !== 'normal').length;
+  if (entries.length === 0) return <EmptyState onNewEntry={onNewEntry} onImport={onImport} />;
+
+  // Load custom groups from localStorage
+  const [customGroups, setCustomGroups] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CUSTOM_GROUPS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+  const [showGroupEditor, setShowGroupEditor] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
+
+  const saveGroups = (groups) => {
+    setCustomGroups(groups);
+    try { localStorage.setItem(CUSTOM_GROUPS_KEY, JSON.stringify(groups)); } catch {}
+  };
+
+  // Build a map of testKey → { test, history } for quick lookup
+  const testIndex = useMemo(() => {
+    const idx = {};
+    activeTests.forEach(t => {
+      idx[t.testKey] = {
+        test: t.test,
+        result: t,
+        history: allResults.filter(r => r.testKey === t.testKey)
+      };
+    });
+    return idx;
+  }, [activeTests, allResults]);
+
+  // Group active tests by panel (built-in groups)
+  const byPanel = useMemo(() => {
+    const groups = {};
+    activeTests.forEach(t => {
+      if (!groups[t.test.panelLabel]) groups[t.test.panelLabel] = [];
+      groups[t.test.panelLabel].push(t.testKey);
+    });
+    return groups;
+  }, [activeTests]);
+
+  // All test keys available for custom group creation (any key in the data)
+  const allTestKeys = useMemo(() => {
+    return Object.keys(testIndex).sort((a, b) =>
+      testIndex[a].test.name.localeCompare(testIndex[b].test.name)
+    );
+  }, [testIndex]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <StatCard label="Collections" value={entries.length} accent="stone" />
+        <StatCard label="Tests Tracked" value={activeTests.length} accent="stone" />
+        <StatCard label="Out of Range" value={abnormalCount} accent={abnormalCount > 0 ? 'amber' : 'emerald'} />
+        <StatCard label="Latest" value={fmtDateShort(entries[entries.length - 1]?.date)} accent="stone" small />
+      </div>
+
+      {/* Custom Groups */}
+      {customGroups.map(group => {
+        const tests = group.testKeys.filter(k => testIndex[k]);
+        if (tests.length === 0) return null;
+        return (
+          <GroupSection
+            key={'custom-' + group.id}
+            label={group.name}
+            badge="CUSTOM"
+            testKeys={tests}
+            testIndex={testIndex}
+            onSelectTest={onSelectTest}
+            onEdit={() => { setEditingGroup(group); setShowGroupEditor(true); }}
+            onDelete={() => {
+              if (confirm(`Delete group "${group.name}"?`)) {
+                saveGroups(customGroups.filter(g => g.id !== group.id));
+              }
+            }}
+          />
+        );
+      })}
+
+      {/* Built-in Panels */}
+      {Object.entries(byPanel).map(([panelLabel, testKeys]) => (
+        <GroupSection
+          key={'panel-' + panelLabel}
+          label={panelLabel}
+          testKeys={testKeys}
+          testIndex={testIndex}
+          onSelectTest={onSelectTest}
+        />
+      ))}
+
+      <div className="pt-4 flex flex-wrap gap-2">
+        <button onClick={() => { setEditingGroup(null); setShowGroupEditor(true); }}
+          className="text-xs font-mono-tag uppercase tracking-wider text-stone-700 hover:text-stone-900 px-3 py-2 border border-stone-300 rounded-lg flex items-center gap-2">
+          <Icon name="plus" className="w-3.5 h-3.5" /> New Custom Group
+        </button>
+        <button onClick={onExport} className="text-xs font-mono-tag uppercase tracking-wider text-stone-500 hover:text-stone-900 px-3 py-2 border border-stone-200 rounded-lg flex items-center gap-2">
+          <Icon name="download" className="w-3.5 h-3.5" /> Export JSON
+        </button>
+        <ImportButton onImport={onImport} />
+      </div>
+
+      {showGroupEditor && (
+        <GroupEditor
+          group={editingGroup}
+          allTestKeys={allTestKeys}
+          testIndex={testIndex}
+          onSave={(group) => {
+            if (editingGroup) {
+              saveGroups(customGroups.map(g => g.id === group.id ? group : g));
+            } else {
+              saveGroups([...customGroups, { ...group, id: Date.now() }]);
+            }
+            setShowGroupEditor(false);
+            setEditingGroup(null);
+          }}
+          onCancel={() => { setShowGroupEditor(false); setEditingGroup(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function GroupSection({ label, badge, testKeys, testIndex, onSelectTest, onEdit, onDelete }) {
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-xs uppercase tracking-widest font-mono-tag text-stone-500">{label}</h2>
+        {badge && <span className="text-[9px] font-mono-tag uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-900 text-white">{badge}</span>}
+        <div className="flex-1 h-px bg-stone-200" />
+        {onEdit && (
+          <button onClick={onEdit} className="text-[10px] font-mono-tag uppercase tracking-wider text-stone-400 hover:text-stone-900">edit</button>
+        )}
+        {onDelete && (
+          <button onClick={onDelete} className="text-[10px] font-mono-tag uppercase tracking-wider text-stone-400 hover:text-rose-600">delete</button>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {testKeys.map(key => {
+          const entry = testIndex[key];
+          if (!entry) return null;
+          return (
+            <MiniChart
+              key={key}
+              test={entry.test}
+              result={entry.result}
+              history={entry.history}
+              onClick={() => onSelectTest(key)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MiniChart({ test, result, history, onClick }) {
+  const { value, status, date } = result;
+  const statusBorder = {
+    normal: 'border-stone-200',
+    high: 'border-amber-300',
+    low: 'border-blue-300',
+  };
+  const lineColour = status === 'normal' ? '#10b981' : status === 'high' ? '#f59e0b' : '#3b82f6';
+
+  // Chronological data for chart
+  const chartData = [...history].reverse().map(h => ({ date: h.date, value: h.value }));
+
+  // Reference range as a band (only when both bounds defined)
+  const refMin = test.low;
+  const refMax = test.high;
+
+  return (
+    <button onClick={onClick}
+      className={`text-left rounded-lg border bg-white p-3.5 hover:shadow-md transition ${statusBorder[status]}`}>
+      <div className="flex items-baseline justify-between gap-1 mb-2">
+        <div className="text-xs font-medium truncate flex-1 min-w-0" title={test.name}>{test.name}</div>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold tabular-nums font-serif-display leading-none">{value}</span>
+        <span className="text-[10px] text-stone-500 font-mono-tag">{test.unit}</span>
+      </div>
+      <div className="h-20 mt-2 -mx-1">
+        {chartData.length >= 2 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              {refMin != null && refMax != null && (
+                <ReferenceArea y1={refMin} y2={refMax} fill="#10b981" fillOpacity={0.06} stroke="none" />
+              )}
+              <Line type="monotone" dataKey="value" stroke={lineColour} strokeWidth={2} dot={{ r: 2, fill: lineColour }} />
+              <YAxis hide domain={['auto', 'auto']} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-[10px] font-mono-tag text-stone-300 uppercase tracking-wider">single point</div>
+        )}
+      </div>
+      <div className="text-[10px] font-mono-tag text-stone-400 mt-2 flex items-center justify-between">
+        <span>Ref: {test.low ?? '—'}–{test.high ?? '—'}</span>
+        <span>{fmtDateShort(date)}</span>
+      </div>
+    </button>
+  );
+}
+
+function GroupEditor({ group, allTestKeys, testIndex, onSave, onCancel }) {
+  const [name, setName] = useState(group?.name || '');
+  const [selected, setSelected] = useState(new Set(group?.testKeys || []));
+  const [search, setSearch] = useState('');
+
+  const toggle = (key) => {
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setSelected(next);
+  };
+
+  const filteredKeys = allTestKeys.filter(k => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return testIndex[k].test.name.toLowerCase().includes(s) || k.toLowerCase().includes(s);
+  });
+
+  const canSave = name.trim().length > 0 && selected.size > 0;
+
+  return (
+    <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="p-4 border-b border-stone-200">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium font-serif-display">{group ? 'Edit Group' : 'New Custom Group'}</h2>
+            <button onClick={onCancel} className="text-stone-400 hover:text-stone-900">
+              <Icon name="x" className="w-5 h-5" />
+            </button>
+          </div>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Group name (e.g. Inflammation, Recovery markers)"
+            className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tests..."
+            className="w-full mt-2 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-xs focus:outline-none focus:border-stone-900" />
+          <div className="text-[10px] font-mono-tag uppercase tracking-wider text-stone-400 mt-2">
+            {selected.size} test{selected.size === 1 ? '' : 's'} selected
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {filteredKeys.map(key => {
+              const t = testIndex[key].test;
+              const isSelected = selected.has(key);
+              return (
+                <button key={key} onClick={() => toggle(key)}
+                  className={`text-left px-3 py-2 rounded-lg border text-xs flex items-center gap-2 transition ${
+                    isSelected ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 hover:border-stone-400'
+                  }`}>
+                  <div className={`w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center ${
+                    isSelected ? 'bg-white border-white' : 'border-stone-300'
+                  }`}>
+                    {isSelected && <Icon name="check" className="w-2.5 h-2.5 text-stone-900" />}
+                  </div>
+                  <span className="truncate flex-1">{t.name}</span>
+                  <span className="text-[9px] font-mono-tag opacity-50 uppercase">{t.panelLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="p-4 border-t border-stone-200 flex gap-2">
+          <button onClick={onCancel} className="flex-1 px-4 py-2 border border-stone-200 rounded-lg text-sm hover:bg-stone-50">Cancel</button>
+          <button onClick={() => onSave({ id: group?.id, name: name.trim(), testKeys: Array.from(selected) })}
+            disabled={!canSave}
+            className="flex-1 px-4 py-2 bg-stone-900 text-white rounded-lg text-sm hover:bg-stone-700 disabled:opacity-30 disabled:cursor-not-allowed">
+            Save Group
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, accent = 'stone', small = false }) {
+  const accents = { stone: 'text-stone-900', emerald: 'text-emerald-600', amber: 'text-amber-600' };
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl p-4">
+      <div className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400 mb-1">{label}</div>
+      <div className={`${small ? 'text-base' : 'text-2xl'} font-bold ${accents[accent]} font-serif-display`}>{value}</div>
+    </div>
+  );
+}
+
+function TestCard({ result, history, onClick }) {
+  const { test, value, status, date } = result;
+  const trend = history.length >= 2 ? history[0].value - history[1].value : 0;
+  const statusStyles = {
+    normal: 'border-stone-200 bg-white',
+    high: 'border-amber-300 bg-amber-50/50',
+    low: 'border-blue-300 bg-blue-50/50',
+  };
+  const dotStyles = { normal: 'bg-emerald-500', high: 'bg-amber-500', low: 'bg-blue-500' };
+
+  return (
+    <button onClick={onClick} className={`text-left rounded-xl border p-4 hover:shadow-md transition group ${statusStyles[status]}`}>
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{test.name}</div>
+          <div className="text-[10px] uppercase tracking-wider font-mono-tag text-stone-400">{fmtDateShort(date)}</div>
+        </div>
+        <div className={`w-2 h-2 rounded-full ${dotStyles[status]} mt-1.5`} />
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-bold tabular-nums font-serif-display">{value}</span>
+        <span className="text-xs text-stone-500 font-mono-tag">{test.unit}</span>
+      </div>
+      <div className="text-[10px] font-mono-tag text-stone-400 mt-1">
+        Ref: {test.low ?? '—'} – {test.high ?? '—'}
+        {history.length >= 2 && (
+          <span className={`ml-2 ${trend > 0 ? 'text-amber-600' : trend < 0 ? 'text-blue-600' : ''}`}>
+            {trend > 0 ? '↑' : trend < 0 ? '↓' : '→'} {Math.abs(trend).toFixed(2)}
+          </span>
+        )}
+      </div>
+      {history.length >= 2 && (
+        <div className="h-8 mt-2 -mx-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={[...history].reverse()}>
+              <Line type="monotone" dataKey="value"
+                stroke={status === 'normal' ? '#10b981' : status === 'high' ? '#f59e0b' : '#3b82f6'}
+                strokeWidth={1.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// =====================================================================
+// ENTRY FORM
+// =====================================================================
+function EntryForm({ onSave, onCancel }) {
+  const today = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(today);
+  const [lab, setLab] = useState('');
+  const [notes, setNotes] = useState('');
+  const [context, setContext] = useState('');
+  const [results, setResults] = useState({});
+  const [activePanel, setActivePanel] = useState('FBC');
+  const [search, setSearch] = useState('');
+  const [mode, setMode] = useState('panel');
+
+  const setValue = (key, val) => setResults(prev => ({ ...prev, [key]: val }));
+
+  const filteredQuick = useMemo(() => {
+    if (!search.trim()) return ALL_TESTS;
+    const q = search.toLowerCase();
+    return ALL_TESTS.filter(t =>
+      t.name.toLowerCase().includes(q) || t.panelLabel.toLowerCase().includes(q) || t.key.toLowerCase().includes(q)
+    );
+  }, [search]);
+
+  const filledCount = Object.values(results).filter(v => v !== '' && v !== null && v !== undefined).length;
+
+  const handleSave = () => {
+    const cleaned = {};
+    Object.entries(results).forEach(([k, v]) => {
+      if (v !== '' && v !== null && v !== undefined) cleaned[k] = v;
+    });
+    if (Object.keys(cleaned).length === 0) { alert('Add at least one result'); return; }
+    onSave({ date, lab: lab.trim(), notes: notes.trim(), context: context.trim(), results: cleaned });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold font-serif-display">New Collection</h1>
+        <button onClick={onCancel} className="p-2 hover:bg-stone-100 rounded-lg">
+          <Icon name="x" className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div>
+          <label className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400">Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400">Lab (optional)</label>
+          <input value={lab} onChange={e => setLab(e.target.value)} placeholder="e.g. Douglass Hanly Moir"
+            className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400">Context</label>
+          <select value={context} onChange={e => setContext(e.target.value)}
+            className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900">
+            <option value="">— None —</option>
+            <option value="Outpatient">Outpatient</option>
+            <option value="Routine screening">Routine screening</option>
+            <option value="Pre-employment">Pre-employment</option>
+            <option value="ED presentation">ED presentation</option>
+            <option value="Inpatient">Inpatient</option>
+            <option value="Pre-op">Pre-op</option>
+            <option value="Post-op">Post-op</option>
+            <option value="Follow-up">Follow-up</option>
+            <option value="Fasting">Fasting</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400">Notes</label>
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Free text"
+            className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+        </div>
+      </div>
+
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-lg w-fit">
+        <button onClick={() => setMode('panel')}
+          className={`px-3 py-1.5 text-xs font-mono-tag uppercase tracking-wider rounded-md transition ${mode === 'panel' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>
+          By Panel
+        </button>
+        <button onClick={() => setMode('quick')}
+          className={`px-3 py-1.5 text-xs font-mono-tag uppercase tracking-wider rounded-md transition ${mode === 'quick' ? 'bg-white shadow-sm' : 'text-stone-500'}`}>
+          Quick Entry
+        </button>
+      </div>
+
+      {mode === 'panel' && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="border-b border-stone-200 overflow-x-auto">
+            <div className="flex">
+              {Object.entries(PANELS).map(([key, panel]) => {
+                const filledInPanel = panel.tests.filter(t =>
+                  results[t.key] !== '' && results[t.key] !== null && results[t.key] !== undefined
+                ).length;
+                return (
+                  <button key={key} onClick={() => setActivePanel(key)}
+                    className={`px-4 py-2.5 text-xs font-mono-tag uppercase tracking-wider border-b-2 whitespace-nowrap transition ${
+                      activePanel === key ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-700'
+                    }`}>
+                    {key}
+                    {filledInPanel > 0 && (
+                      <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 text-[10px] bg-emerald-100 text-emerald-700 rounded-full">
+                        {filledInPanel}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="text-sm text-stone-500 mb-3 font-serif-display">{PANELS[activePanel].label}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {PANELS[activePanel].tests.map(t => (
+                <ResultInput key={t.key} test={t} value={results[t.key] || ''} onChange={v => setValue(t.key, v)} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mode === 'quick' && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className="relative mb-3">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">
+              <Icon name="search" className="w-4 h-4" />
+            </span>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Search any test (e.g. ferritin, TSH, ALT)…"
+              className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto">
+            {filteredQuick.map(t => (
+              <ResultInput key={t.key} test={t} value={results[t.key] || ''} onChange={v => setValue(t.key, v)} showPanel />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="sticky bottom-4 flex justify-between items-center bg-white border border-stone-200 rounded-xl p-3 shadow-lg">
+        <div className="text-xs font-mono-tag text-stone-500">
+          {filledCount} {filledCount === 1 ? 'result' : 'results'} entered
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-stone-600 hover:text-stone-900">Cancel</button>
+          <button onClick={handleSave} disabled={filledCount === 0}
+            className="bg-stone-900 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2">
+            <Icon name="check" className="w-4 h-4" /> Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultInput({ test, value, onChange, showPanel = false }) {
+  const status = flagStatus(value, test.low, test.high);
+  const borderClass = {
+    normal: 'border-stone-200 focus-within:border-stone-900',
+    high: 'border-amber-400 bg-amber-50/30',
+    low: 'border-blue-400 bg-blue-50/30',
+  }[status];
+
+  return (
+    <div className={`border rounded-lg px-3 py-2 transition ${borderClass}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">{test.name}</div>
+          <div className="text-[10px] font-mono-tag text-stone-400">
+            {showPanel && <span className="mr-2">{test.panelLabel}</span>}
+            Ref: {test.low ?? '—'}–{test.high ?? '—'} {test.unit}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="number" step="any" inputMode="decimal" value={value} onChange={e => onChange(e.target.value)}
+            placeholder="—"
+            className="w-20 text-right tabular-nums bg-transparent text-base font-medium focus:outline-none font-serif-display" />
+          {status === 'high' && <Icon name="alert-triangle" className="w-3.5 h-3.5 text-amber-500" />}
+          {status === 'low' && <Icon name="alert-triangle" className="w-3.5 h-3.5 text-blue-500" />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// TRENDS
+// =====================================================================
+// Palette for group-mode multi-line charts (one colour per test)
+const GROUP_COLOURS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7', '#e34948', '#008300'];
+
+function Trends({ allResults, activeTests, selectedTest, onSelectTest }) {
+  const [search, setSearch] = useState('');
+  const [mode, setMode] = useState('single'); // 'single' | 'group'
+  const [selectedPanel, setSelectedPanel] = useState(null);
+  const current = selectedTest || activeTests[0]?.testKey;
+  const test = current ? findTest(current) : null;
+
+  // Panels that have at least 2 tests with usable data (numeric + reference range)
+  const panelsWithData = useMemo(() => {
+    return Object.entries(PANELS).filter(([panelKey, panel]) => {
+      const testsWithData = panel.tests.filter(t => {
+        if (t.low === null || t.high === null) return false;
+        return allResults.some(r => r.testKey === t.key && !isNaN(r.value));
+      });
+      return testsWithData.length >= 2;
+    }).map(([panelKey, panel]) => ({ key: panelKey, label: panel.label }));
+  }, [allResults]);
+
+  // Default selected panel when switching into group mode
+  useEffect(() => {
+    if (mode === 'group' && !selectedPanel && panelsWithData.length > 0) {
+      setSelectedPanel(panelsWithData[0].key);
+    }
+  }, [mode, selectedPanel, panelsWithData]);
+
+  // Group-mode series: one row per date, with normalised values keyed by test key
+  const groupData = useMemo(() => {
+    if (mode !== 'group' || !selectedPanel) return { rows: [], testKeys: [], tests: [] };
+    const panel = PANELS[selectedPanel];
+    if (!panel) return { rows: [], testKeys: [], tests: [] };
+    // Filter test OBJECTS (not keys) — must have range AND at least one numeric result
+    const tests = panel.tests.filter(t => {
+      if (t.low === null || t.high === null) return false;
+      return allResults.some(r => r.testKey === t.key && !isNaN(r.value));
+    });
+    const testKeys = tests.map(t => t.key);
+    const testByKey = Object.fromEntries(tests.map(t => [t.key, t]));
+    const byDate = {};
+    allResults.forEach(r => {
+      const t = testByKey[r.testKey];
+      if (!t || isNaN(r.value)) return;
+      if (!byDate[r.date]) byDate[r.date] = { date: r.date, dateLabel: fmtDateShort(r.date) };
+      const norm = (r.value - t.low) / (t.high - t.low);
+      byDate[r.date][r.testKey] = norm;
+      byDate[r.date][r.testKey + '__raw'] = r.value;
+      byDate[r.date][r.testKey + '__unit'] = t.unit;
+      byDate[r.date][r.testKey + '__status'] = r.status;
+    });
+    const rows = Object.values(byDate).sort((a, b) => new Date(a.date) - new Date(b.date));
+    return { rows, testKeys, tests };
+  }, [mode, selectedPanel, allResults]);
+
+  const series = useMemo(() => {
+    if (!current) return [];
+    return allResults.filter(r => r.testKey === current)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(r => ({ date: r.date, dateLabel: fmtDateShort(r.date), value: r.value, status: r.status, lab: r.lab || 'Unspecified' }));
+  }, [current, allResults]);
+
+  // Build a stable colour palette for labs (across all data, not just current series)
+  const labColours = useMemo(() => {
+    const palette = ['#0ea5e9', '#a855f7', '#ec4899', '#14b8a6', '#f97316', '#84cc16', '#6366f1', '#eab308'];
+    const labs = Array.from(new Set(allResults.map(r => r.lab || 'Unspecified'))).sort();
+    const map = {};
+    labs.forEach((lab, i) => { map[lab] = palette[i % palette.length]; });
+    return map;
+  }, [allResults]);
+
+  // Labs present in current series, in chronological order of first appearance
+  const labsInSeries = useMemo(() => {
+    const seen = new Set();
+    const order = [];
+    series.forEach(s => {
+      if (!seen.has(s.lab)) { seen.add(s.lab); order.push(s.lab); }
+    });
+    return order;
+  }, [series]);
+
+  const filteredTests = useMemo(() => {
+    if (!search.trim()) return activeTests;
+    const q = search.toLowerCase();
+    return activeTests.filter(t =>
+      t.test.name.toLowerCase().includes(q) || t.test.panelLabel.toLowerCase().includes(q)
+    );
+  }, [search, activeTests]);
+
+  if (activeTests.length === 0) {
+    return <div className="text-center py-16 text-stone-400 font-mono-tag text-sm">No data yet — add a collection first</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-2">
+        <div className="inline-flex bg-stone-100 rounded-lg p-0.5 border border-stone-200">
+          <button
+            onClick={() => setMode('single')}
+            className={`px-3 py-1.5 text-xs font-mono-tag uppercase tracking-wider rounded-md transition ${
+              mode === 'single' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+            }`}>
+            Single test
+          </button>
+          <button
+            onClick={() => setMode('group')}
+            disabled={panelsWithData.length === 0}
+            className={`px-3 py-1.5 text-xs font-mono-tag uppercase tracking-wider rounded-md transition ${
+              mode === 'group' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500 hover:text-stone-700 disabled:text-stone-300'
+            }`}>
+            Group by panel
+          </button>
+        </div>
+      </div>
+
+      {mode === 'group' ? (
+        <GroupTrendsView
+          panelsWithData={panelsWithData}
+          selectedPanel={selectedPanel}
+          setSelectedPanel={setSelectedPanel}
+          groupData={groupData}
+        />
+      ) : (
+      <>
+      {/* Test selector bar — full width above chart */}
+      <div className="bg-white border border-stone-200 rounded-xl p-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+        <div className="relative flex-1 min-w-0">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400">
+            <Icon name="search" className="w-3.5 h-3.5" />
+          </span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tests…"
+            className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+        </div>
+        <select value={current || ''} onChange={e => onSelectTest(e.target.value)}
+          className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900 sm:min-w-[280px]">
+          {Object.entries(
+            filteredTests.reduce((acc, t) => {
+              const panel = t.test.panelLabel;
+              if (!acc[panel]) acc[panel] = [];
+              acc[panel].push(t);
+              return acc;
+            }, {})
+          )
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([panelLabel, tests]) => (
+              <optgroup key={panelLabel} label={panelLabel}>
+                {tests.map(t => (
+                  <option key={t.testKey} value={t.testKey}>{t.test.name}</option>
+                ))}
+              </optgroup>
+            ))
+          }
+        </select>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        {test && (
+          <>
+            <div className="flex items-baseline justify-between mb-1">
+              <h2 className="text-2xl font-bold font-serif-display">{test.name}</h2>
+              <div className="text-xs font-mono-tag text-stone-400 uppercase tracking-wider">{test.unit}</div>
+            </div>
+            <div className="text-xs font-mono-tag text-stone-400 mb-4">
+              {test.panelLabel} · Reference: {test.low ?? '—'}–{test.high ?? '—'} {test.unit}
+            </div>
+            {series.length === 1 && (
+              <div className="text-xs text-stone-400 mb-2 font-mono-tag">Single data point — add more to see trend</div>
+            )}
+            <div className="h-72 -ml-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={series} margin={{ top: 20, right: 16, bottom: 8, left: 16 }}>
+                  <CartesianGrid stroke="#e7e5e4" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'monospace' }}
+                    axisLine={{ stroke: '#e7e5e4' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'monospace' }}
+                    axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                  <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8,
+                    fontSize: 12, fontFamily: 'monospace', color: '#fafaf9' }}
+                    labelStyle={{ color: '#a8a29e', fontSize: 10, textTransform: 'uppercase' }}
+                    formatter={(val, _name, item) => {
+                      const lab = item?.payload?.lab;
+                      return [`${val} ${test.unit}${lab ? ` · ${lab}` : ''}`, test.name];
+                    }} />
+                  {test.low !== null && test.high !== null && (
+                    <ReferenceArea y1={test.low} y2={test.high} fill="#10b981" fillOpacity={0.08} />
+                  )}
+                  {test.low !== null && (
+                    <ReferenceLine y={test.low} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} />
+                  )}
+                  {test.high !== null && (
+                    <ReferenceLine y={test.high} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} />
+                  )}
+                  <Line type="monotone" dataKey="value" stroke="#1c1917" strokeWidth={2}
+                    dot={(props) => {
+                      const { cx, cy, payload } = props;
+                      const labColour = labColours[payload.lab] || '#78716c';
+                      const statusRing = payload.status === 'normal' ? '#10b981' :
+                                         payload.status === 'high' ? '#f59e0b' : '#3b82f6';
+                      return (
+                        <g>
+                          <circle cx={cx} cy={cy} r={6} fill={labColour} stroke={statusRing} strokeWidth={2.5} />
+                        </g>
+                      );
+                    }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            {labsInSeries.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-mono-tag uppercase tracking-wider text-stone-500">
+                <div className="flex items-center gap-3">
+                  <span className="text-stone-400">Lab:</span>
+                  {labsInSeries.map(lab => (
+                    <span key={lab} className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: labColours[lab] }} />
+                      {lab}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-stone-400">Status (ring):</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-stone-300" style={{ boxShadow: 'inset 0 0 0 2px #10b981' }} />
+                    Normal
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-stone-300" style={{ boxShadow: 'inset 0 0 0 2px #f59e0b' }} />
+                    High
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-stone-300" style={{ boxShadow: 'inset 0 0 0 2px #3b82f6' }} />
+                    Low
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="mt-6 border-t border-stone-100 pt-4">
+              <div className="text-[10px] uppercase tracking-widest font-mono-tag text-stone-400 mb-2">
+                All values ({series.length})
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {[...series].reverse().map((s, i) => (
+                  <div key={i} className="px-3 py-2 bg-stone-50 rounded-lg">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] font-mono-tag text-stone-400">{fmtDate(s.date)}</div>
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: labColours[s.lab] }} title={s.lab} />
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-base font-bold tabular-nums font-serif-display">{s.value}</span>
+                      <span className={`text-[10px] font-mono-tag ${
+                        s.status === 'high' ? 'text-amber-600' : s.status === 'low' ? 'text-blue-600' : 'text-emerald-600'
+                      }`}>
+                        {s.status === 'high' ? 'H' : s.status === 'low' ? 'L' : '✓'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+// =====================================================================
+// GROUP TRENDS VIEW (multi-line normalised chart for a full panel)
+// =====================================================================
+function GroupTrendsView({ panelsWithData, selectedPanel, setSelectedPanel, groupData }) {
+  if (panelsWithData.length === 0) {
+    return (
+      <div className="bg-white border border-stone-200 rounded-xl p-6 text-center text-stone-400 font-mono-tag text-sm">
+        Not enough data yet — need at least 2 tests with results in the same panel.
+      </div>
+    );
+  }
+  const panelLabel = PANELS[selectedPanel]?.label || '';
+  const { rows, testKeys, tests } = groupData;
+  const colourFor = (i) => GROUP_COLOURS[i % GROUP_COLOURS.length];
+
+  return (
+    <div className="space-y-4">
+      {/* Panel selector */}
+      <div className="bg-white border border-stone-200 rounded-xl p-3">
+        <select value={selectedPanel || ''} onChange={e => setSelectedPanel(e.target.value)}
+          className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900">
+          {panelsWithData.map(p => (
+            <option key={p.key} value={p.key}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Chart */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
+        <div className="flex items-baseline justify-between mb-1">
+          <h2 className="text-2xl font-bold font-serif-display">{panelLabel}</h2>
+          <div className="text-xs font-mono-tag text-stone-400 uppercase tracking-wider">Normalised</div>
+        </div>
+        <div className="text-xs font-mono-tag text-stone-400 mb-4">
+          Position within each test's reference range · 0 = lower limit, 1 = upper limit
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="py-12 text-center text-stone-400 font-mono-tag text-sm">No data for this panel</div>
+        ) : (
+          <>
+            <div className="h-80 -ml-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={rows} margin={{ top: 20, right: 16, bottom: 8, left: 16 }}>
+                  <CartesianGrid stroke="#e7e5e4" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="dateLabel" tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'monospace' }}
+                    axisLine={{ stroke: '#e7e5e4' }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: '#a8a29e', fontFamily: 'monospace' }}
+                    axisLine={false} tickLine={false} domain={[-0.6, 1.6]}
+                    ticks={[-0.5, 0, 0.5, 1, 1.5]}
+                    tickFormatter={(v) => v === 0 ? 'lower' : v === 1 ? 'upper' : v === 0.5 ? 'mid' : ''} />
+                  <Tooltip contentStyle={{ background: '#1c1917', border: 'none', borderRadius: 8,
+                    fontSize: 11, fontFamily: 'monospace', color: '#fafaf9' }}
+                    labelStyle={{ color: '#a8a29e', fontSize: 10, textTransform: 'uppercase' }}
+                    formatter={(val, name, item) => {
+                      const key = item?.dataKey;
+                      const p = item?.payload || {};
+                      const raw = p[key + '__raw'];
+                      const unit = p[key + '__unit'];
+                      const status = p[key + '__status'];
+                      const t = findTest(key);
+                      const tag = status === 'high' ? ' (H)' : status === 'low' ? ' (L)' : '';
+                      return [`${raw} ${unit}${tag}`, t?.name || key];
+                    }} />
+                  <ReferenceArea y1={0} y2={1} fill="#10b981" fillOpacity={0.08} />
+                  <ReferenceLine y={0} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} />
+                  <ReferenceLine y={1} stroke="#10b981" strokeDasharray="4 4" strokeOpacity={0.5} />
+                  {testKeys.map((key, i) => (
+                    <Line key={key} type="monotone" dataKey={key} stroke={colourFor(i)} strokeWidth={2}
+                      dot={{ r: 4, fill: colourFor(i), stroke: '#fff', strokeWidth: 2 }}
+                      activeDot={{ r: 6 }}
+                      connectNulls={true} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-mono-tag text-stone-600">
+              {tests.map((t, i) => (
+                <span key={t.key} className="flex items-center gap-1.5">
+                  <span className="w-3 h-0.5 rounded" style={{ background: colourFor(i) }} />
+                  {t.name} <span className="text-stone-400">({t.unit}, {t.low}–{t.high})</span>
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// HISTORY
+// =====================================================================
+function History({ entries, onDelete }) {
+  if (entries.length === 0) {
+    return <div className="text-center py-16 text-stone-400 font-mono-tag text-sm">No collections yet</div>;
+  }
+  const sorted = [...entries].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  return (
+    <div className="space-y-3">
+      {sorted.map(entry => {
+        const resultCount = Object.keys(entry.results || {}).length;
+        const abnormal = Object.entries(entry.results || {}).filter(([k, v]) => {
+          const t = findTest(k);
+          if (!t) return false;
+          return flagStatus(v, t.low, t.high) !== 'normal';
+        }).length;
+
+        return (
+          <div key={entry.id} className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-stone-100 flex items-center justify-between">
+              <div>
+                <div className="font-medium font-serif-display flex items-center gap-2">
+                  {fmtDate(entry.date)}
+                  {entry.context && (
+                    <span className="text-[10px] font-mono-tag uppercase tracking-wider px-2 py-0.5 rounded bg-stone-900 text-white">
+                      {entry.context}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] font-mono-tag uppercase tracking-wider text-stone-400">
+                  {resultCount} results · {abnormal} flagged
+                  {entry.lab && ` · ${entry.lab}`}
+                  {entry.notes && ` · ${entry.notes}`}
+                </div>
+              </div>
+              <button onClick={() => { if (confirm('Delete this collection?')) onDelete(entry.id); }}
+                className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded">
+                <Icon name="trash-2" className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {Object.entries(entry.results).map(([key, value]) => {
+                const t = findTest(key);
+                if (!t) return null;
+                const status = flagStatus(value, t.low, t.high);
+                return (
+                  <div key={key} className={`px-3 py-2 rounded-lg border ${
+                    status === 'normal' ? 'border-stone-100 bg-stone-50' :
+                    status === 'high' ? 'border-amber-200 bg-amber-50' : 'border-blue-200 bg-blue-50'
+                  }`}>
+                    <div className="text-[10px] font-mono-tag text-stone-500 truncate">{t.name}</div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold tabular-nums font-serif-display">{value}</span>
+                      <span className="text-[10px] font-mono-tag text-stone-400">{t.unit}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// =====================================================================
+// EMPTY / IMPORT / EXPORT
+// =====================================================================
+function EmptyState({ onNewEntry, onImport }) {
+  return (
+    <div className="text-center py-16">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-stone-900 flex items-center justify-center">
+        <Icon name="activity" className="w-8 h-8 text-emerald-400" strokeWidth={2} />
+      </div>
+      <h2 className="text-3xl font-bold mb-2 font-serif-display">Start tracking</h2>
+      <p className="text-stone-500 text-sm max-w-md mx-auto mb-6">
+        Add your first lab collection. Pre-loaded with FBC, UEC, LFTs, lipids, TFTs, iron, coags, HbA1c, vit D, B12, calprotectin and more.
+      </p>
+      <div className="flex gap-2 justify-center flex-wrap">
+        <button onClick={onNewEntry}
+          className="bg-stone-900 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-stone-800 flex items-center gap-2">
+          <Icon name="plus" className="w-4 h-4" /> New collection
+        </button>
+        <ImportButton onImport={onImport} />
+      </div>
+    </div>
+  );
+}
+
+function ImportButton({ onImport }) {
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!Array.isArray(data)) throw new Error('Invalid format');
+        if (confirm(`Import ${data.length} collections? This will replace existing data.`)) onImport(data);
+      } catch (err) { alert('Could not parse file: ' + err.message); }
+    };
+    reader.readAsText(file);
+  };
+  return (
+    <label className="text-xs font-mono-tag uppercase tracking-wider text-stone-500 hover:text-stone-900 px-3 py-2 border border-stone-200 rounded-lg flex items-center gap-2 cursor-pointer">
+      <Icon name="upload" className="w-3.5 h-3.5" /> Import JSON
+      <input type="file" accept=".json" onChange={handleFile} className="hidden" />
+    </label>
+  );
+}
+
+function exportData(entries) {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lab-data-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Mount
+ReactDOM.createRoot(document.getElementById('root')).render(<LabTracker />);
+</script>
+</body>
+</html>
