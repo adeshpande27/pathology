@@ -1129,12 +1129,18 @@ function Trends({ allResults, activeTests, selectedTest, onSelectTest }) {
             <Icon name="search" className="w-3.5 h-3.5" />
           </span>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tests…"
-            className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+            className="w-full pl-8 pr-8 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900" />
+          {search && (
+            <button onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-0.5">
+              <Icon name="x" className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         <select value={current || ''} onChange={e => onSelectTest(e.target.value)}
           className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-900 sm:min-w-[280px]">
           {Object.entries(
-            filteredTests.reduce((acc, t) => {
+            activeTests.reduce((acc, t) => {
               const panel = t.test.panelLabel;
               if (!acc[panel]) acc[panel] = [];
               acc[panel].push(t);
@@ -1152,6 +1158,37 @@ function Trends({ allResults, activeTests, selectedTest, onSelectTest }) {
           }
         </select>
       </div>
+
+      {/* Search results as clickable pills — only when there's a query */}
+      {search.trim() && (
+        <div className="bg-white border border-stone-200 rounded-xl p-3">
+          {filteredTests.length === 0 ? (
+            <div className="text-sm text-stone-400 font-mono-tag text-center py-2">
+              No tests match "{search}"
+            </div>
+          ) : (
+            <>
+              <div className="text-[10px] uppercase tracking-wider font-mono-tag text-stone-400 mb-2">
+                {filteredTests.length} match{filteredTests.length === 1 ? '' : 'es'}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {filteredTests.map(t => (
+                  <button key={t.testKey}
+                    onClick={() => { onSelectTest(t.testKey); setSearch(''); }}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition ${
+                      current === t.testKey
+                        ? 'bg-stone-900 text-white border-stone-900'
+                        : 'bg-stone-50 text-stone-700 border-stone-200 hover:border-stone-900'
+                    }`}>
+                    <span className="font-medium">{t.test.name}</span>
+                    <span className="ml-1.5 opacity-60 font-mono-tag text-[10px] uppercase">{t.test.panelLabel}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="bg-white border border-stone-200 rounded-xl p-4 sm:p-6">
         {test && (
